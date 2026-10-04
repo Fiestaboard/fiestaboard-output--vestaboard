@@ -41,6 +41,17 @@ Board settings (stored on the board):
 
 The board's shape — `device_type` (`flagship`, `note`, `note_array`) and, for a note array, `notes_wide` / `notes_tall` — is part of the board, not of this plugin's settings.
 
+### The settings screen
+
+FiestaBoard draws this board's settings screen from `manifest.json` alone (its board settings contract, no plugin UI code), in Settings → Hardware and in the setup wizard:
+
+- **Connection** — Local API or Cloud API, as two cards (`mode-cards`).
+- **Flagship and Note** — Local API: the board's IP address with a network scan (`device-picker`, the `discover` action), its Local API key, and the port under Advanced. Cloud API: the Read/Write API key.
+- **Note array** — Local API: one slot per Note (`tile-grid` sized by the board's layout); each slot takes its Note's address, key and port, and can **Identify** (flash its position) or **Get API Key from Board**. Cloud API: the Cloud API token.
+- **Actions** — Test Connection; Get API Key from Board (trades an enablement token for a Local API key, which fills the key field); Auto-detect from board (reads the layout and applies the type and size; not for a local note array, whose size is its tiles).
+
+Which fields show depends on the connection and on the board's shape (`ui:visible_when` with the board's `@device_type`). Every key and token is a secret: shown as `***` once saved and never logged.
+
 Environment variables:
 
 | Variable | Description |
