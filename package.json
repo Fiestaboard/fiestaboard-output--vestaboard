@@ -1,0 +1,14 @@
+{
+  "name": "@fiestaboard/output-vestaboard",
+  "version": "1.0.0",
+  "description": "Device data for the FiestaBoard Vestaboard output plugin (data only, no code).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Fiestaboard/fiestaboard-output--vestaboard.git"
+  },
+  "files": [
+    "output/*.json"
+  ],
+  "private": true
+}

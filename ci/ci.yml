@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Nightly against core `next`, so a core change that breaks this plugin
+    # shows up here before a release (plan D9).
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      core_ref:
+        description: "FiestaBoard ref to test against (branch, tag or SHA)"
+        required: false
+        default: next
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  versions:
+    name: package.json matches manifest.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare versions
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          manifest = json.load(open("manifest.json"))["version"]
+          package = json.load(open("package.json"))["version"]
+          if manifest != package:
+              sys.exit(f"package.json version {package} != manifest.json version {manifest}; bump both together")
+          print(f"versions agree: {manifest}")
+          PY
+
+  test:
+    name: Tests and output conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Fiestaboard/FiestaBoard
+          # The output-plugin API this plugin targets (output_api 1) is on
+          # `next` until FiestaBoard 10.0.0 is tagged; then pin a tag here.
+          ref: ${{ inputs.core_ref || 'next' }}
+          path: fiestaboard-core
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r fiestaboard-core/requirements.txt
+          pip install pytest pytest-cov pytest-socket
+
+      # The tests include core's OutputConformanceSuite run against this
+      # plugin; the network fence allows loopback only.
+      - name: Run tests (loopback only) with the conformance suite
+        run: ./run_tests.sh fiestaboard-core
