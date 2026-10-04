@@ -379,9 +379,10 @@ class VestaboardOutput(OutputPluginBase):
     # --- output-level hooks FiestaBoard wires into its registry entry -----------------------
 
     @classmethod
-    def discover(cls, timeout: float) -> list[dict]:
-        """Vestaboards on this network: mDNS, then a subnet probe of port 7000."""
-        return _discovery.discover(timeout)
+    def discover(cls, timeout: float, hint: str | None = None) -> list[dict]:
+        """Vestaboards on this network: mDNS, then a subnet probe of port 7000
+        on *hint*'s network (the browser's address) and this host's."""
+        return _discovery.discover(timeout, hint=hint) if hint else _discovery.discover(timeout)
 
     @classmethod
     def diagnose_board(cls, board: Mapping[str, Any]) -> dict:

@@ -183,6 +183,11 @@ class TestDiscover:
         discover.assert_called_once_with(used)
         assert (outcome.message, outcome.devices) == ("No boards found.", ())
 
+    def test_the_browsers_network_hint_reaches_the_scan(self, lender):
+        with mock.patch("plugins.vestaboard.discovery.discover", return_value=[]) as discover:
+            lender.run("discover", _board(), inputs={"timeout": 2, "hint_host": "192.168.1.20"})
+        discover.assert_called_once_with(2.0, hint="192.168.1.20")
+
     def test_found_boards_are_the_devices(self, lender):
         found = [{"ip": "192.0.2.40", "port": 7000, "hostname": "vb.local", "source": "mdns"}]
         with mock.patch("plugins.vestaboard.discovery.discover", return_value=found):

@@ -136,10 +136,14 @@ def test_tile(ctx: Any) -> ActionOutcome:
 
 
 def discover(ctx: Any) -> ActionOutcome:
-    """Vestaboards on this network (mDNS, then a subnet probe of the Local API port)."""
+    """Vestaboards on this network (mDNS, then a subnet probe of the Local API port).
+
+    FiestaBoard hands the browser's private IPv4 address as the ``hint_host``
+    input; its network is probed first."""
     raw = ctx.inputs.get("timeout", _SCAN_DEFAULT_S)
     timeout = min(max(float(raw), _SCAN_MIN_S), _SCAN_MAX_S)
-    devices = _discovery.discover(timeout)
+    hint = ctx.inputs.get("hint_host")
+    devices = _discovery.discover(timeout, hint=hint) if hint else _discovery.discover(timeout)
     message = f"Found {len(devices)} board(s)." if devices else "No boards found."
     return ActionOutcome(message=message, devices=tuple(devices))
 

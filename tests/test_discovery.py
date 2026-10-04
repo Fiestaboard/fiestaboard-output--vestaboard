@@ -6,6 +6,8 @@ Never simulate a missing dependency with ``patch("builtins.__import__")``:
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from plugins.vestaboard import discovery
 
 
@@ -140,3 +142,58 @@ class TestScanForBoards:
         ):
             result = discovery.discover(timeout=0.1)
         assert isinstance(result, list)
+
+
+class TestNetworkHint:
+    """FiestaBoard's ``hint_host``: in Docker bridge mode this host's own /24
+    is a container network, so the browser's network is probed first."""
+
+    @staticmethod
+    def _probed(hint, local_ip="172.17.0.2"):
+        probed = []
+
+        def fake_probe(ip, port=7000, timeout=0.5):
+            probed.append(ip)
+            return ip == "192.168.1.77"
+
+        with (
+            patch.dict("sys.modules", {"zeroconf": None}),
+            patch.object(discovery, "_probe_vestaboard_port", side_effect=fake_probe),
+            patch.object(discovery, "local_ipv4", return_value=local_ip),
+        ):
+            found = discovery.discover(timeout=0.1, hint=hint)
+        return probed, found
+
+    def test_a_board_on_the_browsers_network_is_found_from_a_bridge_container(self):
+        probed, found = self._probed("192.168.1.20")
+        assert found == [{"ip": "192.168.1.77", "port": 7000, "hostname": "", "source": "port_scan"}]
+        assert {ip.rsplit(".", 1)[0] for ip in probed} == {"192.168.1", "172.17.0"}
+
+    def test_without_a_hint_only_this_hosts_network_is_probed(self):
+        probed, found = self._probed(None)
+        assert found == []
+        assert {ip.rsplit(".", 1)[0] for ip in probed} == {"172.17.0"}
+        assert "172.17.0.2" not in probed
+
+    def test_neither_fiestaboards_own_addresses_are_probed(self):
+        probed, _ = self._probed("192.168.1.20")
+        assert "192.168.1.20" not in probed and "172.17.0.2" not in probed
+
+    def test_a_hint_on_this_hosts_network_probes_it_once(self):
+        probed, _ = self._probed("10.0.0.20", local_ip="10.0.0.1")
+        assert len(probed) == len(set(probed)) == 252
+
+    @pytest.mark.parametrize("hint", ["8.8.8.8", "fiestaboard.local", "127.0.0.1", ""])
+    def test_a_hint_that_is_not_a_private_ipv4_address_is_ignored(self, hint):
+        probed, _ = self._probed(hint)
+        assert {ip.rsplit(".", 1)[0] for ip in probed} == {"172.17.0"}
+
+    def test_the_output_hook_hands_the_hint_to_the_scan(self):
+        from unittest.mock import call
+
+        from plugins.vestaboard import VestaboardOutput
+
+        with patch.object(discovery, "discover", return_value=[]) as scan:
+            VestaboardOutput.discover(3.0, hint="192.168.1.20")
+            VestaboardOutput.discover(3.0)
+        assert scan.call_args_list == [call(3.0, hint="192.168.1.20"), call(3.0)]

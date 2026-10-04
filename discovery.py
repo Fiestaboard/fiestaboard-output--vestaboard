@@ -2,10 +2,14 @@
 
 ``POST /config/board/scan`` and the board settings "Scan network" action
 reach it through FiestaBoard's ``discover_devices`` (the output's
-``discover`` classmethod). It uses FiestaBoard's ``local_ipv4`` to pick the
-subnet to probe.
+``discover`` classmethod). It probes the /24 of the browser's address
+(*hint*: FiestaBoard's ``hint_host``, the private IPv4 address the user
+opened FiestaBoard at), then the /24 of FiestaBoard's own ``local_ipv4``. In
+Docker bridge mode FiestaBoard's own address is a container network, so the
+hint is what finds a board there.
 """
 
+import ipaddress
 import logging
 import socket
 import threading
@@ -35,20 +39,49 @@ def _probe_vestaboard_port(ip: str, port: int = _VESTABOARD_LOCAL_API_PORT, time
         return False
 
 
-def discover(timeout: float = 4.0) -> list[dict[str, Any]]:
+#: The networks a hint may name: RFC 1918 and IPv4 link-local.
+_HINT_NETWORKS = tuple(
+    ipaddress.IPv4Network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16")
+)
+
+
+def _lan_address(value: Any) -> str | None:
+    """*value* when it is a private or link-local IPv4 address, else ``None``."""
+    try:
+        address = ipaddress.IPv4Address(str(value).strip())
+    except ValueError:
+        return None
+    return str(address) if any(address in network for network in _HINT_NETWORKS) else None
+
+
+def _probe_prefixes(hint: str | None, local_ip: str | None) -> list[str]:
+    """The /24 prefixes (``"192.168.1"``) to probe, in order: the hint's, then this host's."""
+    prefixes: list[str] = []
+    for address in (_lan_address(hint) if hint else None, local_ip if local_ip != "127.0.0.1" else None):
+        if address:
+            prefix = ".".join(address.split(".")[:3])
+            if prefix not in prefixes:
+                prefixes.append(prefix)
+    return prefixes
+
+
+def discover(timeout: float = 4.0, hint: str | None = None) -> list[dict[str, Any]]:
     """Scan the local network for Vestaboard devices.
 
     Uses two complementary strategies:
     1. **mDNS browse** – listens for ``_vestaboard._tcp`` and ``_http._tcp``
        service advertisements.  Any service whose name contains "vestaboard"
        (case-insensitive) or that has port 7000 is included.
-    2. **Subnet port probe** – iterates over the /24 subnet of this host and
-       checks whether port 7000 (Vestaboard Local API) is open.
+    2. **Subnet port probe** – iterates over the /24 subnet of *hint*, then
+       that of this host, and checks whether port 7000 (Vestaboard Local
+       API) is open.
 
     Args:
         timeout: How long (seconds) to wait for mDNS responses and port
             probes.  The mDNS browse phase uses the full *timeout*; the
             port-probe phase uses a 0.5 s connect timeout per host.
+        hint: The private IPv4 address the user opened FiestaBoard at, or
+            ``None``. Anything else (a hostname, a public address) is ignored.
 
     Returns:
         A list of dicts, each with at least ``ip`` and ``port`` keys plus
@@ -121,8 +154,9 @@ def discover(timeout: float = 4.0) -> list[dict[str, Any]]:
         from concurrent.futures import ThreadPoolExecutor
 
         local_ip = local_ipv4()
-        if local_ip and local_ip != "127.0.0.1":
-            prefix = ".".join(local_ip.split(".")[:3])
+        own = {local_ip, _lan_address(hint) if hint else None}
+        prefixes = _probe_prefixes(hint, local_ip)
+        if prefixes:
             probe_results: list[str] = []
             probe_lock = threading.Lock()
 
@@ -133,8 +167,9 @@ def discover(timeout: float = 4.0) -> list[dict[str, Any]]:
 
             candidates = [
                 f"{prefix}.{i}"
+                for prefix in prefixes
                 for i in range(1, 255)
-                if f"{prefix}.{i}" != local_ip and f"{prefix}.{i}" not in seen_ips
+                if f"{prefix}.{i}" not in own and f"{prefix}.{i}" not in seen_ips
             ]
 
             with ThreadPoolExecutor(max_workers=50) as pool:

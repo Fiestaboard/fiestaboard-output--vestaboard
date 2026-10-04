@@ -73,7 +73,7 @@ Environment variables:
 - Read/Write Cloud API and note-array Cloud API, each held to Vestaboard's one-message-per-15-seconds limit by FiestaBoard
 - A Cloud API `429 Too Many Requests` holds sends for the `Retry-After` the cloud asked for
 - Local note arrays: one POST per Note, a partial write when a Note fails, and a retry that re-sends only the failed Notes
-- Board discovery on your network (mDNS and a port scan of the Local API)
+- Board discovery on your network (mDNS and a port scan of the Local API), searching the network you opened FiestaBoard from first, so a scan works when FiestaBoard runs in Docker's bridge mode
 - Connection checks with plain-English troubleshooting, and network diagnostics
 - Local API enablement: trade an enablement token for a Local API key
 - Identify: flash each Note's position on it
