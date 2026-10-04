@@ -7,6 +7,7 @@ plugin itself decides, against a scripted device behind ``self.http``.
 
 from __future__ import annotations
 
+import dataclasses
 from types import SimpleNamespace
 
 import pytest
@@ -144,11 +145,20 @@ class TestCapabilities:
 
     @pytest.mark.parametrize("config", [LOCAL, CLOUD, NOTE_ARRAY_CLOUD, TILES], ids=["local", "rw", "array", "tiles"])
     def test_every_connection_streams_a_transition_plugins_frames(self, make, manifest, config):
-        """The device models say ``delivery: "none"`` (the hardware's own
-        cascade); a Vestaboard shows a transition plugin's frames one message
-        at a time on every connection, the cloud floor pacing them."""
-        assert manifest.output.capabilities.animation == "none"
+        """The device models say ``delivery: "stream"`` (FiestaUI's review-fix
+        batch): a Vestaboard shows a transition plugin's frames one message at
+        a time on every connection, the cloud floor pacing them."""
+        assert manifest.output.capabilities.animation == "stream"
         assert make(config)[0].capabilities().animation == "stream"
+
+    def test_every_model_streams_at_about_one_frame_a_second(self, manifest):
+        for model in manifest.output.device_models:
+            assert (model["animation"]["delivery"], model["animation"]["maxFps"]) == ("stream", 1), model["id"]
+
+    def test_the_animation_comes_from_the_device_models_not_an_override(self, manifest):
+        declared = dataclasses.replace(manifest.output.capabilities, animation="none")
+        caps = VestaboardOutput.declared_capabilities(SimpleNamespace(capabilities=declared))
+        assert caps.animation == "none"
 
     def test_capabilities_need_a_bound_manifest(self):
         with pytest.raises(RuntimeError):

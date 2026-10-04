@@ -1,6 +1,6 @@
 {
   "name": "@fiestaboard/output-vestaboard",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Device data for the FiestaBoard Vestaboard output plugin (data only, no code).",
   "license": "MIT",
   "repository": {

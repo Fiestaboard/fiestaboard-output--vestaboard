@@ -139,25 +139,20 @@ class VestaboardOutput(OutputPluginBase):
     def declared_capabilities(cls, manifest: Any) -> Any:
         """A split-flap pushed over HTTP, which takes a stream of frames.
 
-        ``animation`` is ``"stream"`` on every connection, overriding the
-        FiestaUI device models' ``delivery: "none"``. Those models describe
-        the hardware's own flap cascade between two messages ("a client sends
-        one message, never frames"); FiestaBoard's ``animation`` asks whether
-        the device can show *intermediate frames* of a transition plugin, and
-        a Vestaboard can: each frame is one more message, and the board
+        ``animation`` is the device models' own: ``delivery: "stream"`` at
+        about one frame a second (FiestaUI's models since its 2026-10-04
+        review fixes). A Vestaboard shows *intermediate frames* of a
+        transition plugin: each frame is one more message, and the board
         cascades from frame to frame. The pace is the connection's: the Local
         API is unfloored, the cloud APIs' 15-second floor
         (:meth:`capabilities`' ``min_interval_ms``) spaces the frames — what
-        boards have always done. (FiestaUI is asked to model these devices as
-        ``delivery: "stream"`` with a low ``maxFps``; this override goes when
-        the vendored models say so.) The Local API animates every native
+        boards have always done. The Local API animates every native
         strategy and the cloud APIs none — :meth:`capabilities` narrows per
         board."""
         return dataclasses.replace(
             manifest.capabilities,
             technology="split_flap",
             delivery="push",
-            animation="stream",
             native_transitions=frozenset(VALID_STRATEGIES),
             min_interval_ms=0,
             read_back=None,
