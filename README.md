@@ -79,6 +79,32 @@ Environment variables:
 - Local API enablement: trade an enablement token for a Local API key
 - Identify: flash each Note's position on it
 
+## Development
+
+Tests run against a FiestaBoard core checkout that has the output-plugin API:
+
+```bash
+./run_tests.sh /path/to/FiestaBoard
+```
+
+The script builds an ignored `plugins/<id>` import scaffold so the tests import this plugin as
+`plugins.<id>`, the name FiestaBoard gives it. The suite includes FiestaBoard's
+`OutputConformanceSuite`, runs behind a network fence that allows loopback only, and needs 80%
+coverage.
+
+CI (`.github/workflows/ci.yml`) runs on every push and pull request to `main`, and nightly:
+
+- **versions**: `package.json` and `manifest.json` carry the same version. `package.json`
+  publishes only the device data (`output/*.json`) so FiestaUI can depend on it; bump both
+  together.
+- **test**: checks out FiestaBoard core and runs `./run_tests.sh` on Python 3.11. The default core
+  ref is the top branch of the unmerged output-plugins stack until it reaches `next`; the
+  `core_ref` input of a manual run picks another branch, tag or commit.
+
+FiestaBoard bundles this plugin at the commit pinned in its `outputs.lock.json`. A release here
+reaches users when a pull request to FiestaBoard bumps that pin (`commit` and `tree_sha256`; print
+the digest with `python scripts/seed_outputs.py digest <clean checkout>`).
+
 ## Author
 
 FiestaBoard

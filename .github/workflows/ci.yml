@@ -6,15 +6,16 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Nightly against core `next`, so a core change that breaks this plugin
-    # shows up here before a release (plan D9).
+    # Nightly against the default core ref (below), so a core change that
+    # breaks this plugin shows up here before a release (plan D9).
     - cron: "17 6 * * *"
   workflow_dispatch:
     inputs:
       core_ref:
         description: "FiestaBoard ref to test against (branch, tag or SHA)"
         required: false
-        default: next
+        # Switch to next once stack #2198 merges (keep in step with `ref:` below).
+        default: chore/vestaboard-audit-and-deprecations
 
 permissions:
   contents: read
@@ -49,15 +50,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Fiestaboard/FiestaBoard
-          # The output-plugin API this plugin targets (output_api 1) is on
-          # `next` until FiestaBoard 10.0.0 is tagged; then pin a tag here.
-          ref: ${{ inputs.core_ref || 'next' }}
+          # The output-plugin API this plugin targets (output_api 1) is not on
+          # `next` yet: it is in the unmerged output-plugins stack (#2198), so
+          # CI tests against the stack's top branch.
+          # Switch to next once stack #2198 merges; once FiestaBoard 10.0.0 is
+          # tagged, pin a tag here.
+          ref: ${{ inputs.core_ref || 'chore/vestaboard-audit-and-deprecations' }}
           path: fiestaboard-core
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: fiestaboard-core/requirements.txt
 
       - name: Install dependencies
         run: |
