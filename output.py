@@ -17,30 +17,29 @@ every request through ``self.http``.
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import hashlib
 import logging
 import math
 from collections.abc import Mapping
-from types import SimpleNamespace
 from typing import Any
 
 import requests
 
 from src.plugins import (
-    ActionField,
     ActionOutcome,
     ConnectionCheck,
     DiagnosticCheck,
     OutputPluginBase,
+    OutputStatus,
     ReadBack,
     WriteResult,
 )
 
+from . import actions as _actions
 from . import diagnostics as _diagnostics
 from . import discovery as _discovery
-from . import local_api as _local_api
+from . import settings as _settings
 from . import transport
 from .connection import Connection, board_config, resolve
 from .probe import probe
@@ -138,10 +137,22 @@ class VestaboardOutput(OutputPluginBase):
 
     @classmethod
     def declared_capabilities(cls, manifest: Any) -> Any:
-        """A split-flap pushed over HTTP. Core streams a transition plugin's
-        frames to it one write at a time (the FiestaUI models' "none" is the
-        hardware's own cascade); the Local API animates every native strategy
-        and the cloud APIs none — :meth:`capabilities` narrows per board."""
+        """A split-flap pushed over HTTP, which takes a stream of frames.
+
+        ``animation`` is ``"stream"`` on every connection, overriding the
+        FiestaUI device models' ``delivery: "none"``. Those models describe
+        the hardware's own flap cascade between two messages ("a client sends
+        one message, never frames"); FiestaBoard's ``animation`` asks whether
+        the device can show *intermediate frames* of a transition plugin, and
+        a Vestaboard can: each frame is one more message, and the board
+        cascades from frame to frame. The pace is the connection's: the Local
+        API is unfloored, the cloud APIs' 15-second floor
+        (:meth:`capabilities`' ``min_interval_ms``) spaces the frames — what
+        boards have always done. (FiestaUI is asked to model these devices as
+        ``delivery: "stream"`` with a low ``maxFps``; this override goes when
+        the vendored models say so.) The Local API animates every native
+        strategy and the cloud APIs none — :meth:`capabilities` narrows per
+        board."""
         return dataclasses.replace(
             manifest.capabilities,
             technology="split_flap",
@@ -382,26 +393,47 @@ class VestaboardOutput(OutputPluginBase):
         """Plain-English troubleshooting for a failed board section."""
         return _diagnostics.advise(section)
 
+    # --- board settings (plan D13): what FiestaBoard asks about a board's settings ----
+
+    #: The settings-v3 flat fields every API view of a board still carries,
+    #: with their defaults (:mod:`.settings`).
+    legacy_flat_fields = _settings.LEGACY_FLAT_FIELDS
+
     @classmethod
-    def hook_actions(cls) -> dict[str, Any]:
-        """Output-level actions FiestaBoard's legacy routes run by name."""
+    def normalize_config(cls, config: Mapping[str, Any] | None, board: Mapping[str, Any]) -> dict[str, Any]:
+        """The ``output_config`` a board stores: every connection field, normalised."""
+        return _settings.normalize(config, board)
 
-        async def enable_local_api(request: Any) -> dict:
-            return await _local_api.exchange_enablement_token(request)
+    @classmethod
+    def mask_config(cls, config: Mapping[str, Any], schema: Any) -> dict[str, Any]:
+        """The board's config for an API view: every set credential ``"***"``."""
+        return _settings.mask(config)
 
-        return {"enable_local_api": enable_local_api}
+    @classmethod
+    def restore_config(cls, incoming: Any, stored: Any, schema: Any) -> Any:
+        """An echoed config with each ``"***"`` credential restored from the
+        stored one (a tile's key follows its endpoint, then its position)."""
+        if not isinstance(incoming, dict):
+            return incoming
+        return _settings.restore(incoming, stored if isinstance(stored, Mapping) else {})
 
-    # --- board settings actions ----------------------------------------------------------
+    @classmethod
+    def masked_config_paths(cls, config: Any, schema: Any) -> list[str]:
+        """The credentials still ``"***"`` in *config*."""
+        return _settings.masked_paths(config) if isinstance(config, Mapping) else []
 
-    def action_enable_local_api(self, inputs: Mapping[str, Any]) -> ActionOutcome:
-        """Exchange an enablement token for a Local API key (the key comes back secret)."""
-        host = inputs.get("host") or self.connection.host or ""
-        request = SimpleNamespace(host=host, enablement_token=inputs.get("enablement_token") or "")
-        verdict = asyncio.run(_local_api.exchange_enablement_token(request))
-        if not verdict.get("success"):
-            guidance = (verdict["error"],) if verdict.get("error") else ()
-            return ActionOutcome(status="error", message=verdict.get("message", ""), guidance=guidance)
-        return ActionOutcome(
-            message=verdict.get("message", ""),
-            fields={"api_key": ActionField(value=verdict.get("api_key"), secret=True)},
-        )
+    @classmethod
+    def board_status(cls, config: Mapping[str, Any] | None, board: Mapping[str, Any]) -> OutputStatus:
+        """Connected when the board has the details a driver needs — the
+        selected mode's credential (and host), a note array's token, or one
+        usable tile — else Not configured; ``attempted`` when any detail is set."""
+        configured, attempted = _settings.status(config, board)
+        return OutputStatus(configured=configured, attempted=attempted)
+
+    @classmethod
+    def handle_action(cls, ctx: Any) -> ActionOutcome:
+        """Run one declared board-settings action (:mod:`.actions`)."""
+        runner = _actions.RUNNERS.get(ctx.action)
+        if runner is None:
+            raise NotImplementedError(f"VestaboardOutput implements no action '{ctx.action}'")
+        return runner(ctx)

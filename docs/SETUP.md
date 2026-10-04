@@ -63,4 +63,4 @@ Environment variables (developers):
 - Vestaboard's cloud accepts one message every 15 seconds. FiestaBoard waits that long between messages, and longer if the cloud asks it to. The Local API has no such limit.
 
 **One Note of an array stays blank**
-- Check that Note's IP address and key under the array's tiles, and select **Identify** to see which Note is which.
+- Open that Note's slot under the array's tiles and select **Test** to check its IP address and key, then **Identify** to see which Note is which.

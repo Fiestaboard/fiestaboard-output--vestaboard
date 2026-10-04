@@ -47,10 +47,18 @@ FiestaBoard draws this board's settings screen from `manifest.json` alone (its b
 
 - **Connection** — Local API or Cloud API, as two cards (`mode-cards`).
 - **Flagship and Note** — Local API: the board's IP address with a network scan (`device-picker`, the `discover` action), its Local API key, and the port under Advanced. Cloud API: the Read/Write API key.
-- **Note array** — Local API: one slot per Note (`tile-grid` sized by the board's layout); each slot takes its Note's address, key and port, and can **Identify** (flash its position) or **Get API Key from Board**. Cloud API: the Cloud API token.
+- **Note array** — Local API: one slot per Note (`tile-grid` sized by the board's layout); each slot takes its Note's address, key and port, and can **Test** that Note, **Identify** it (flash its position) or **Get API Key from Board**. Cloud API: the Cloud API token.
 - **Actions** — Test Connection; Get API Key from Board (trades an enablement token for a Local API key, which fills the key field); Auto-detect from board (reads the layout and applies the type and size; not for a local note array, whose size is its tiles).
 
 Which fields show depends on the connection and on the board's shape (`ui:visible_when` with the board's `@device_type`). Every key and token is a secret: shown as `***` once saved and never logged.
+
+### What FiestaBoard asks this plugin
+
+FiestaBoard holds no Vestaboard rules of its own: it asks the plugin class.
+
+- **Actions** (`handle_action`, `actions.py`) — every button above, and FiestaBoard's older routes that do the same jobs (`POST /config/board/test`, `/config/board/enable-local-api`, `/settings/board/{id}/identify`, `/settings/board/{id}/detect-size`), which answer from the same code.
+- **Status** (`board_status`) — the board card's Connected / Not configured badge: Connected when the board has what a connection needs (the selected mode's key, and the address for the Local API; a note array's token, or one usable Note).
+- **Settings** (`normalize_config`, `mask_config`, `restore_config`, `masked_config_paths`, `legacy_flat_fields`; `settings.py`) — how a board's settings are stored, how its keys are hidden as `***` and restored when the screen sends `***` back (a Note's key follows its address when Notes are swapped), and the flat fields FiestaBoard's API still answers with for older clients.
 
 Environment variables:
 

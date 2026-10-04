@@ -15,6 +15,14 @@ import requests
 from plugins.vestaboard import VestaboardOutput
 from plugins.vestaboard.connection import board_config, normalize_tiles, resolve
 from plugins.vestaboard.output import CLOUD_READ_BACK, LOCAL_READ_BACK, classify_grid, credential_digest
+from plugins.vestaboard.tiles import identify_pattern, slice_grid, stitch_grid
+from plugins.vestaboard.transport import (
+    CLOUD_API_URL,
+    CLOUD_NOTE_ARRAY_API_URL,
+    VALID_STRATEGIES,
+    retry_after_seconds,
+)
+
 from .conftest import (
     CLOUD,
     LOCAL,
@@ -24,13 +32,6 @@ from .conftest import (
     response,
     tile,
     token,
-)
-from plugins.vestaboard.tiles import identify_pattern, slice_grid, stitch_grid
-from plugins.vestaboard.transport import (
-    CLOUD_API_URL,
-    CLOUD_NOTE_ARRAY_API_URL,
-    VALID_STRATEGIES,
-    retry_after_seconds,
 )
 
 
@@ -140,6 +141,14 @@ class TestCapabilities:
     def test_a_cloud_board_has_a_15s_floor_and_no_native_strategy(self, make, config):
         caps = make(config)[0].capabilities()
         assert (caps.native_transitions, caps.min_interval_ms, caps.read_back) == (frozenset(), 15000, CLOUD_READ_BACK)
+
+    @pytest.mark.parametrize("config", [LOCAL, CLOUD, NOTE_ARRAY_CLOUD, TILES], ids=["local", "rw", "array", "tiles"])
+    def test_every_connection_streams_a_transition_plugins_frames(self, make, manifest, config):
+        """The device models say ``delivery: "none"`` (the hardware's own
+        cascade); a Vestaboard shows a transition plugin's frames one message
+        at a time on every connection, the cloud floor pacing them."""
+        assert manifest.output.capabilities.animation == "none"
+        assert make(config)[0].capabilities().animation == "stream"
 
     def test_capabilities_need_a_bound_manifest(self):
         with pytest.raises(RuntimeError):
@@ -398,42 +407,3 @@ class TestReadAndProbe:
         monkeypatch.setattr(diagnostics, "diagnose", lambda board: section)
         checks = make(LOCAL)[0].diagnostics()
         assert [(c.name, c.ok, c.detail) for c in checks] == [("dns", True, ""), ("port", False, "closed")]
-
-
-class TestEnableLocalApi:
-    def test_the_key_comes_back_secret(self, make, monkeypatch):
-        from plugins.vestaboard import local_api
-
-        async def exchange(request):
-            assert (request.host, request.enablement_token) == ("192.0.2.10", "test_token")
-            return {"success": True, "api_key": "test_new_key", "message": "Local API enabled successfully!"}
-
-        monkeypatch.setattr(local_api, "exchange_enablement_token", exchange)
-        outcome = make(LOCAL)[0].action_enable_local_api({"enablement_token": "test_token"})
-        assert (outcome.status, outcome.fields["api_key"].value, outcome.fields["api_key"].secret) == (
-            "ok",
-            "test_new_key",
-            True,
-        )
-
-    def test_a_refused_token_is_an_error_with_guidance(self, make, monkeypatch):
-        from plugins.vestaboard import local_api
-
-        async def exchange(request):
-            return {"success": False, "message": "Invalid enablement token.", "error": "HTTP 401: Unauthorized"}
-
-        monkeypatch.setattr(local_api, "exchange_enablement_token", exchange)
-        outcome = make(LOCAL)[0].action_enable_local_api({"enablement_token": "bad"})
-        assert (outcome.status, outcome.guidance) == ("error", ("HTTP 401: Unauthorized",))
-
-    def test_the_hook_core_runs_by_name(self, monkeypatch):
-        import asyncio
-
-        from plugins.vestaboard import local_api
-
-        async def exchange(request):
-            return {"success": True}
-
-        monkeypatch.setattr(local_api, "exchange_enablement_token", exchange)
-        hook = VestaboardOutput.hook_actions()["enable_local_api"]
-        assert asyncio.run(hook(SimpleNamespace(host="h", enablement_token="t"))) == {"success": True}
