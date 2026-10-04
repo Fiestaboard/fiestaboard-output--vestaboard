@@ -143,13 +143,19 @@ class TestCapabilities:
         caps = make(config)[0].capabilities()
         assert (caps.native_transitions, caps.min_interval_ms, caps.read_back) == (frozenset(), 15000, CLOUD_READ_BACK)
 
-    @pytest.mark.parametrize("config", [LOCAL, CLOUD, NOTE_ARRAY_CLOUD, TILES], ids=["local", "rw", "array", "tiles"])
-    def test_every_connection_streams_a_transition_plugins_frames(self, make, manifest, config):
+    @pytest.mark.parametrize("config", [LOCAL, TILES], ids=["local", "tiles"])
+    def test_a_local_connection_streams_a_transition_plugins_frames(self, make, manifest, config):
         """The device models say ``delivery: "stream"`` (FiestaUI's review-fix
-        batch): a Vestaboard shows a transition plugin's frames one message at
-        a time on every connection, the cloud floor pacing them."""
+        batch): over the Local API a Vestaboard shows a transition plugin's
+        frames one message at a time."""
         assert manifest.output.capabilities.animation == "stream"
         assert make(config)[0].capabilities().animation == "stream"
+
+    @pytest.mark.parametrize("config", [CLOUD, NOTE_ARRAY_CLOUD], ids=["rw-cloud", "note-array-cloud"])
+    def test_a_cloud_connection_snaps_a_transition_plugin_to_its_target(self, make, config):
+        """One message per 15 seconds would make a transition's frames a
+        minutes-long crawl: a cloud board shows the target at once."""
+        assert make(config)[0].capabilities().animation == "none"
 
     def test_every_model_streams_at_about_one_frame_a_second(self, manifest):
         for model in manifest.output.device_models:

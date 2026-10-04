@@ -145,10 +145,11 @@ class VestaboardOutput(OutputPluginBase):
         transition plugin: each frame is one more message, and the board
         cascades from frame to frame. The pace is the connection's: the Local
         API is unfloored, the cloud APIs' 15-second floor
-        (:meth:`capabilities`' ``min_interval_ms``) spaces the frames — what
-        boards have always done. The Local API animates every native
-        strategy and the cloud APIs none — :meth:`capabilities` narrows per
-        board."""
+        (:meth:`capabilities`' ``min_interval_ms``) would space the frames
+        15 seconds apart, so a cloud connection declares ``animation:
+        "none"`` and a transition plugin snaps straight to its target there.
+        The Local API animates every native strategy and the cloud APIs none
+        — :meth:`capabilities` narrows per board."""
         return dataclasses.replace(
             manifest.capabilities,
             technology="split_flap",
@@ -167,15 +168,25 @@ class VestaboardOutput(OutputPluginBase):
             raise RuntimeError("VestaboardOutput: no manifest bound")
         declared = self.declared_capabilities(self._output_manifest)
         mode = self.connection.mode
+        # A cloud board takes one message per 15 seconds: a transition's
+        # frames would crawl for minutes, so they snap (animation "none").
         if mode == "cloud":
             floor_ms = int(CLOUD_MIN_SEND_INTERVAL * 1000)
             return dataclasses.replace(
-                declared, native_transitions=frozenset(), min_interval_ms=floor_ms, read_back=CLOUD_READ_BACK
+                declared,
+                animation="none",
+                native_transitions=frozenset(),
+                min_interval_ms=floor_ms,
+                read_back=CLOUD_READ_BACK,
             )
         if mode == "note_array_cloud":
             floor_ms = int(NOTE_ARRAY_MIN_SEND_INTERVAL * 1000)
             return dataclasses.replace(
-                declared, native_transitions=frozenset(), min_interval_ms=floor_ms, read_back=CLOUD_READ_BACK
+                declared,
+                animation="none",
+                native_transitions=frozenset(),
+                min_interval_ms=floor_ms,
+                read_back=CLOUD_READ_BACK,
             )
         return dataclasses.replace(declared, read_back=LOCAL_READ_BACK)
 

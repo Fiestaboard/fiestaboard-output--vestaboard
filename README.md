@@ -71,6 +71,7 @@ Environment variables:
 
 - Local API writes with the board's own transitions (Wave, Drift, Curtain, row, diagonal, random)
 - Read/Write Cloud API and note-array Cloud API, each held to Vestaboard's one-message-per-15-seconds limit by FiestaBoard
+- Transition plugins animate frame by frame over the Local API; on a cloud board they snap straight to the new message, since one message per 15 seconds would turn a transition into a minutes-long crawl
 - A Cloud API `429 Too Many Requests` holds sends for the `Retry-After` the cloud asked for
 - Local note arrays: one POST per Note, a partial write when a Note fails, and a retry that re-sends only the failed Notes
 - Board discovery on your network (mDNS and a port scan of the Local API), searching the network you opened FiestaBoard from first, so a scan works when FiestaBoard runs in Docker's bridge mode
